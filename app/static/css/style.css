@@ -1,0 +1,415 @@
+/* ==========================================================================
+   VIDEO STUDIO AI — ULTRA-LUXURY STUDIO AESTHETIC (DARK OBSIDIAN & CHAMPAGNE GOLD)
+   Inspirado en software profesional de alto nivel (Runway, DaVinci Resolve Studio, Linear)
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* Fondo Oscuro Obsidiana & Plum Profundo */
+  --bg-void: #09030e;
+  --bg-base: #0f0617;
+  --bg-surface-1: #150921;
+  --bg-surface-2: #1c0d2b;
+  --bg-surface-3: #251238;
+  --bg-surface-glass: rgba(22, 10, 34, 0.75);
+
+  /* Púrpura Real Sutil (No estridente) */
+  --purple-brand: #4b0081;
+  --purple-glow: rgba(75, 0, 129, 0.35);
+  --purple-subtle: #2d1045;
+
+  /* Oro Champaña Metálico y Pulido (Refinado, no amarillo chillón) */
+  --gold-primary: #d4af37;
+  --gold-champagne: #e2c680;
+  --gold-light: #f5e4b3;
+  --gold-dark: #997c2e;
+  --gold-border: rgba(212, 175, 55, 0.18);
+  --gold-border-hover: rgba(226, 198, 128, 0.45);
+  --gold-border-active: #d4af37;
+
+  /* Gradientes Metálicos Pulidos */
+  --btn-gold-grad: linear-gradient(180deg, #f5e2a3 0%, #d4af37 100%);
+  --btn-gold-hover: linear-gradient(180deg, #ffffff 0%, #e8c975 100%);
+  --btn-purple-grad: linear-gradient(180deg, #26113b 0%, #170926 100%);
+
+  /* Tipografía y Jerarquía */
+  --text-primary: #ffffff;
+  --text-secondary: #ebd8be;
+  --text-muted: #9c8aa9;
+  --text-subtle: #6a5678;
+
+  /* Sombras y Luces */
+  --shadow-subtle: 0 4px 20px rgba(0, 0, 0, 0.45);
+  --shadow-luxury: 0 16px 40px -10px rgba(0, 0, 0, 0.8), 0 0 0 1px var(--gold-border);
+  --gold-ambient: 0 0 25px rgba(212, 175, 55, 0.15);
+}
+
+/* Base Body */
+body {
+  background-color: var(--bg-void);
+  background-image: 
+    radial-gradient(ellipse 80% 50% at 50% -15%, rgba(75, 0, 129, 0.35) 0%, transparent 70%),
+    radial-gradient(circle 600px at 85% 85%, rgba(45, 0, 80, 0.25) 0%, transparent 60%),
+    linear-gradient(180deg, var(--bg-base) 0%, var(--bg-void) 100%);
+  background-attachment: fixed;
+  color: var(--text-primary);
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif;
+  letter-spacing: -0.01em;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar Minimalista de Estudio */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-void);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-surface-3);
+  border-radius: 9999px;
+  border: 1px solid rgba(212, 175, 55, 0.15);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gold-dark);
+}
+
+/* ==========================================================================
+   HEADER Y NAVEGACIÓN PRINCIPAL
+   ========================================================================== */
+
+header {
+  background: rgba(15, 6, 23, 0.8) !important;
+  backdrop-filter: blur(24px) saturate(180%) !important;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.16) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+}
+
+nav {
+  background: rgba(11, 4, 18, 0.95) !important;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.14) !important;
+}
+
+/* ==========================================================================
+   STEPPER DE FLUJO DE TRABAJO (SEGMENTED STUDIO STEPPER)
+   ========================================================================== */
+
+.step-item {
+  color: var(--text-muted) !important;
+  border-bottom: 2px solid transparent !important;
+  padding: 0.875rem 0.5rem !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  position: relative;
+  font-weight: 500 !important;
+  font-size: 0.8125rem !important;
+}
+
+.step-item:hover {
+  color: var(--text-secondary) !important;
+}
+
+.step-item.active {
+  color: #ffffff !important;
+  border-bottom: 2px solid var(--gold-champagne) !important;
+  font-weight: 600 !important;
+}
+
+.step-item .step-num {
+  width: 1.5rem !important;
+  height: 1.5rem !important;
+  font-size: 0.75rem !important;
+  border-radius: 9999px !important;
+  font-weight: 700 !important;
+  transition: all 0.25s ease !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-item.active .step-num {
+  background: var(--btn-gold-grad) !important;
+  color: #0d0514 !important;
+  border: none !important;
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.4) !important;
+}
+
+.step-item:not(.active) .step-num {
+  background: var(--bg-surface-2) !important;
+  color: var(--text-muted) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ==========================================================================
+   CONTENEDORES, TARJETAS Y PANELES
+   ========================================================================== */
+
+.bg-dark-800,
+.bg-dark-900,
+.bg-dark-950,
+.scene-card,
+.step-view > div {
+  background: linear-gradient(165deg, rgba(26, 12, 40, 0.75) 0%, rgba(15, 6, 23, 0.9) 100%) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid var(--gold-border) !important;
+  box-shadow: var(--shadow-luxury) !important;
+  border-radius: 1rem !important;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.scene-card:hover {
+  border-color: var(--gold-border-hover) !important;
+  box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.85), 0 0 20px rgba(212, 175, 55, 0.1) !important;
+  transform: translateY(-2px);
+}
+
+/* ==========================================================================
+   BOTONES PREMIUM DE ESTUDIO
+   ========================================================================== */
+
+/* Botón Primario Dorado Champaña */
+#btn-analyze-script,
+#btn-start-render,
+#btn-download-video,
+button.bg-cyan-600,
+button.bg-gradient-to-r.from-cyan-500,
+.btn-gold {
+  background: var(--btn-gold-grad) !important;
+  color: #0f0517 !important;
+  font-weight: 700 !important;
+  font-size: 0.8125rem !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  box-shadow: 0 4px 16px rgba(212, 175, 55, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
+  border-radius: 0.75rem !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+#btn-analyze-script:hover,
+#btn-start-render:hover,
+#btn-download-video:hover,
+button.bg-cyan-600:hover,
+button.bg-gradient-to-r.from-cyan-500:hover,
+.btn-gold:hover {
+  background: var(--btn-gold-hover) !important;
+  box-shadow: 0 8px 24px rgba(212, 175, 55, 0.4), inset 0 1px 0 #ffffff !important;
+  transform: translateY(-1px);
+}
+
+#btn-analyze-script:active,
+#btn-start-render:active,
+.btn-gold:active {
+  transform: translateY(0);
+}
+
+/* Botón Secundario Obsidiana & Borde Fino */
+button.bg-slate-800,
+button.bg-slate-700,
+#btn-projects-modal,
+.btn-luxury-secondary {
+  background: var(--btn-purple-grad) !important;
+  border: 1px solid rgba(212, 175, 55, 0.2) !important;
+  color: var(--text-primary) !important;
+  font-weight: 500 !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  transition: all 0.2s ease !important;
+}
+
+button.bg-slate-800:hover,
+button.bg-slate-700:hover,
+#btn-projects-modal:hover,
+.btn-luxury-secondary:hover {
+  background: linear-gradient(180deg, #30174a 0%, #1f0d33 100%) !important;
+  border-color: var(--gold-border-hover) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), 0 0 10px rgba(212, 175, 55, 0.12) !important;
+  transform: translateY(-1px);
+}
+
+/* Botones de Procesamiento por Lote (Morado Estudio) */
+#btn-gen-all-images,
+#btn-gen-all-audio,
+button.bg-purple-600,
+button.bg-gradient-to-r.from-purple-600 {
+  background: linear-gradient(180deg, #44146e 0%, #2b0b4a 100%) !important;
+  border: 1px solid rgba(212, 175, 55, 0.35) !important;
+  color: var(--gold-light) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+  transition: all 0.2s ease !important;
+}
+
+#btn-gen-all-images:hover,
+#btn-gen-all-audio:hover {
+  background: linear-gradient(180deg, #55198a 0%, #370e5e 100%) !important;
+  border-color: var(--gold-champagne) !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 20px rgba(75, 0, 129, 0.4), 0 0 12px rgba(212, 175, 55, 0.2) !important;
+  transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   FORMULARIOS, INPUTS Y SELECTORES
+   ========================================================================== */
+
+input[type="text"],
+input[type="password"],
+input[type="number"],
+textarea,
+select {
+  background: rgba(12, 5, 18, 0.85) !important;
+  border: 1px solid rgba(212, 175, 55, 0.2) !important;
+  color: #ffffff !important;
+  border-radius: 0.75rem !important;
+  padding: 0.65rem 0.95rem !important;
+  font-size: 0.875rem !important;
+  transition: all 0.2s ease !important;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--gold-champagne) !important;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15) !important;
+  background: rgba(17, 7, 26, 0.95) !important;
+  outline: none !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(156, 138, 169, 0.5) !important;
+}
+
+/* ==========================================================================
+   SELECTOR DE FORMATO (ASPECT RATIO) Y ESTILO
+   ========================================================================== */
+
+.aspect-card {
+  background: rgba(15, 6, 23, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 0.875rem !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.aspect-card:hover {
+  border-color: rgba(212, 175, 55, 0.35) !important;
+  background: rgba(26, 12, 40, 0.6) !important;
+  transform: translateY(-2px);
+}
+
+.aspect-card.selected {
+  border-color: var(--gold-champagne) !important;
+  background: linear-gradient(165deg, rgba(45, 16, 69, 0.65) 0%, rgba(20, 8, 31, 0.9) 100%) !important;
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.2), inset 0 0 0 1px var(--gold-champagne) !important;
+}
+
+.aspect-card.selected > div:first-child {
+  border-color: var(--gold-champagne) !important;
+  background-color: rgba(212, 175, 55, 0.18) !important;
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.35);
+}
+
+.style-card {
+  background: rgba(15, 6, 23, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 0.875rem !important;
+  transition: all 0.2s ease !important;
+}
+
+.style-card:hover {
+  border-color: rgba(212, 175, 55, 0.35) !important;
+  transform: translateY(-2px);
+}
+
+.style-card.border-cyan-400,
+.style-card.border-gold-400,
+.style-card.selected {
+  border-color: var(--gold-champagne) !important;
+  background: linear-gradient(165deg, rgba(45, 16, 69, 0.7) 0%, rgba(20, 8, 31, 0.9) 100%) !important;
+  box-shadow: 0 0 16px rgba(212, 175, 55, 0.2), inset 0 0 0 1px var(--gold-champagne) !important;
+}
+
+/* ==========================================================================
+   PESTAÑAS DE NARRACIÓN (AI VOICE / PROPIO)
+   ========================================================================== */
+
+#tab-audio-ai,
+#tab-audio-custom {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  padding: 0.75rem 1.25rem !important;
+  transition: all 0.2s ease;
+}
+
+#tab-audio-ai.border-cyan-400,
+#tab-audio-ai.border-gold-400,
+#tab-audio-custom.border-cyan-400,
+#tab-audio-custom.border-gold-400 {
+  border-bottom: 2px solid var(--gold-champagne) !important;
+  color: var(--gold-light) !important;
+  font-weight: 600 !important;
+}
+
+/* ==========================================================================
+   BARRA DE PROGRESO DE EXPORTACIÓN & REPRODUCTOR FINAL
+   ========================================================================== */
+
+#render-progress-bar {
+  background: linear-gradient(90deg, #997c2e 0%, #d4af37 50%, #f5e4b3 100%) !important;
+  box-shadow: 0 0 16px rgba(212, 175, 55, 0.4) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+#render-progress-bar::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%; width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  animation: shimmer 1.8s infinite;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+.video-wrapper {
+  background: #000000 !important;
+  border: 1px solid var(--gold-border) !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.95), 0 0 30px rgba(75, 0, 129, 0.25) !important;
+  border-radius: 1rem !important;
+}
+
+/* ==========================================================================
+   MODALES (VENTANAS EMERGENTES)
+   ========================================================================== */
+
+#projects-modal > div,
+#apikey-modal > div {
+  background: linear-gradient(165deg, rgba(25, 11, 38, 0.98) 0%, rgba(13, 5, 20, 0.99) 100%) !important;
+  border: 1px solid rgba(212, 175, 55, 0.28) !important;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.95), 0 0 35px rgba(212, 175, 55, 0.15) !important;
+  backdrop-filter: blur(28px) !important;
+  border-radius: 1.25rem !important;
+}
+
+/* Sliders de audio */
+input[type="range"] {
+  accent-color: var(--gold-champagne) !important;
+}
+
+/* Overrides de compatibilidad */
+.text-cyan-400,
+.text-cyan-300 {
+  color: var(--gold-champagne) !important;
+}
+.bg-cyan-500\/10,
+.bg-cyan-500\/20 {
+  background-color: rgba(212, 175, 55, 0.12) !important;
+  border-color: rgba(212, 175, 55, 0.25) !important;
+  color: var(--gold-champagne) !important;
+}
