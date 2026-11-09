@@ -20,7 +20,7 @@ async function loadSystemConfig() {
   try {
     const res = await fetch("/api/config");
     appState.config = await res.json();
-    
+
     // Actualizar indicador de API Key con estilo Studio
     const badge = document.getElementById("api-status-badge");
     if (appState.config.has_gemini_key) {
@@ -59,7 +59,7 @@ async function loadProject(projectId) {
     const res = await fetch(`/api/projects/${projectId}`);
     if (!res.ok) throw new Error("No se pudo cargar el proyecto");
     appState.project = await res.json();
-    
+
     document.getElementById("current-project-label").innerText = appState.project.name || "Proyecto";
     populateProjectData();
     switchStep(appState.project.current_step || 1, false);
@@ -161,7 +161,7 @@ function switchStep(stepNumber, save = true) {
   for (let i = 1; i <= 6; i++) {
     const btn = document.getElementById(`step-btn-${i}`);
     const view = document.getElementById(`step-${i}`);
-    
+
     if (i === stepNumber) {
       btn.className = "step-item active py-3 px-2 text-xs font-semibold flex items-center gap-2.5 transition";
       btn.querySelector(".step-num").className = "step-num w-6 h-6 rounded-full bg-gold-500 text-royal-950 flex items-center justify-center font-bold text-[11px] shadow-sm";
@@ -210,7 +210,7 @@ function selectAspectRatio(ratio, updateState = true) {
   document.querySelectorAll(".aspect-card").forEach(el => el.classList.remove("selected"));
   const target = document.getElementById(`aspect-${ratio.replace(":", "-")}`);
   if (target) target.classList.add("selected");
-  
+
   // Actualizar etiqueta de exportación
   const dimLabel = document.getElementById("export-dim-label");
   if (dimLabel) {
@@ -249,7 +249,7 @@ async function analyzeScript() {
   }
 
   await saveProjectBasicInfo();
-  
+
   const btn = document.getElementById("btn-analyze-script");
   btn.disabled = true;
   btn.innerHTML = `<span class="animate-spin mr-2">⚙️</span> Analizando con Gemini 3.5 Flash...`;
@@ -329,11 +329,11 @@ function renderStep3Gallery() {
 
   container.innerHTML = appState.project.scenes.map(s => {
     const isApproved = s.image_status === "approved";
-    const statusBadge = isApproved 
+    const statusBadge = isApproved
       ? `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">✓ Aprobada</span>`
       : `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-400/40">⏳ Pendiente</span>`;
 
-    const imgPreview = s.image_path 
+    const imgPreview = s.image_path
       ? `<img src="${s.image_path}" alt="Escena ${s.order}" class="w-full h-48 object-cover rounded-xl border border-white/10 shadow-sm">`
       : `<div class="w-full h-48 bg-royal-950 border-2 border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center text-slate-400 text-xs">
            <i data-lucide="image" class="w-7 h-7 mb-2 opacity-50"></i>
@@ -401,11 +401,11 @@ async function regenerateSceneImage(sceneId) {
     const res = await fetch(`/api/projects/${appState.project.id}/scenes/${sceneId}/generate-image`, { method: "POST" });
     if (!res.ok) throw new Error("Error generando imagen");
     const data = await res.json();
-    
+
     // Actualizar escena local
     const idx = appState.project.scenes.findIndex(s => s.id === sceneId);
     if (idx !== -1) appState.project.scenes[idx] = data.scene;
-    
+
     showToast("Imagen generada con éxito", "success");
     renderStep3Gallery();
   } catch (err) {
@@ -583,7 +583,7 @@ async function handleCustomAudioUpload(input) {
     });
     if (!res.ok) throw new Error("Error subiendo audio");
     appState.project = await res.json();
-    
+
     // Mostrar reproductor de audio propio
     const playerContainer = document.getElementById("custom-audio-player-container");
     const audioElem = document.getElementById("custom-audio-elem");
@@ -605,7 +605,7 @@ function renderStep5Timeline() {
   let totalDur = 0;
   container.innerHTML = appState.project.scenes.map((s, idx) => {
     totalDur += parseFloat(s.duration || 4.0);
-    const thumb = s.image_path 
+    const thumb = s.image_path
       ? `<img src="${s.image_path}" class="w-20 h-14 object-cover rounded-lg border border-white/10 shadow-sm">`
       : `<div class="w-20 h-14 bg-royal-950 border border-white/10 rounded-lg flex items-center justify-center text-[10px] text-slate-500">Sin img</div>`;
 
@@ -666,7 +666,7 @@ function moveSceneOrder(idx, delta) {
   if (targetIdx < 0 || targetIdx >= appState.project.scenes.length) return;
   const item = appState.project.scenes.splice(idx, 1)[0];
   appState.project.scenes.splice(targetIdx, 0, item);
-  
+
   // Renumerar orden
   appState.project.scenes.forEach((s, i) => s.order = i + 1);
   renderStep5Timeline();
@@ -707,15 +707,21 @@ async function startVideoRender() {
   resultBox.classList.add("hidden");
 
   try {
-    const res = await fetch(`/api/projects/${appState.project.id}/render`, { method: "POST" });
+    // CAMBIO AQUÍ: de /render a /generate
+    const res = await fetch(`/api/projects/${appState.project.id}/generate`, { method: "POST" });
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.detail || "Error iniciando render");
+      throw new Error(err.detail || "Error iniciando generación");
     }
 
     // Comenzar polling de estado
+    const cancelBtn = document.getElementById("btn-cancel-render");
+    if (cancelBtn) {
+      cancelBtn.disabled = false;
+      cancelBtn.innerHTML = `<span>⏹ Cancelar Generación</span>`;
+    }
     if (appState.renderInterval) clearInterval(appState.renderInterval);
-    appState.renderInterval = setInterval(pollRenderProgress, 1500);
+    appState.renderInterval = setInterval(pollRenderProgress, 1200);
   } catch (err) {
     preBox.classList.remove("hidden");
     progressBox.classList.add("hidden");
@@ -723,28 +729,63 @@ async function startVideoRender() {
   }
 }
 
+async function cancelVideoRender() {
+  if (!appState.project) return;
+  const cancelBtn = document.getElementById("btn-cancel-render");
+  if (cancelBtn) {
+    cancelBtn.disabled = true;
+    cancelBtn.innerHTML = `<span>⏳ Cancelando proceso FFmpeg...</span>`;
+  }
+  try {
+    const res = await fetch(`/api/projects/${appState.project.id}/cancel`, { method: "POST" });
+    if (!res.ok) throw new Error("No se pudo cancelar la tarea");
+    if (appState.renderInterval) clearInterval(appState.renderInterval);
+    document.getElementById("render-pre-box").classList.remove("hidden");
+    document.getElementById("render-progress-box").classList.add("hidden");
+    showToast("Generación cancelada y archivos temporales limpiados.", "info");
+  } catch (err) {
+    showToast(`Error al cancelar: ${err.message}`, "error");
+  }
+}
+
 async function pollRenderProgress() {
   try {
-    const res = await fetch(`/api/projects/${appState.project.id}/render-status`);
-    const status = await res.json();
+    // 1. Cambiamos al nuevo endpoint de status
+    const res = await fetch(`/api/projects/${appState.project.id}/status`);
+    const data = await res.json();
 
     const progressBar = document.getElementById("render-progress-bar");
     const statusMsg = document.getElementById("render-status-msg");
     const statusPct = document.getElementById("render-status-pct");
 
-    progressBar.style.width = `${status.percent}%`;
-    statusMsg.innerText = status.message || "Procesando...";
-    statusPct.innerText = `${status.percent}%`;
+    // 2. Ajustamos a las nuevas variables: 'progress' y 'current_step'
+    progressBar.style.width = `${data.progress}%`;
+    statusMsg.innerText = data.current_step || "Procesando...";
+    statusPct.innerText = `${data.progress}%`;
 
-    if (status.status === "completed") {
+    // 3. Evaluamos los estados finales
+    if (data.status === "completed") {
       clearInterval(appState.renderInterval);
       showToast("¡Video renderizado con éxito!", "success");
-      showFinalVideo(status.final_video_path);
-    } else if (status.status === "failed") {
+
+      // Consultamos el proyecto un momento para obtener la ruta del video final
+      const projRes = await fetch(`/api/projects/${appState.project.id}`);
+      const projData = await projRes.json();
+      if (projData.final_video_path) {
+        showFinalVideo(projData.final_video_path);
+      }
+
+    } else if (data.status === "failed") {
       clearInterval(appState.renderInterval);
       document.getElementById("render-pre-box").classList.remove("hidden");
       document.getElementById("render-progress-box").classList.add("hidden");
-      showToast(`Fallo en renderizado: ${status.message}`, "error");
+      showToast(`Fallo en renderizado: ${data.error_message || "Error desconocido"}`, "error");
+
+    } else if (data.status === "cancelled") { // <-- NUEVO ESTADO DE CANCELACIÓN
+      clearInterval(appState.renderInterval);
+      document.getElementById("render-pre-box").classList.remove("hidden");
+      document.getElementById("render-progress-box").classList.add("hidden");
+      showToast("Generación de video cancelada por el usuario.", "warning");
     }
   } catch (err) {
     console.error("Error en polling:", err);

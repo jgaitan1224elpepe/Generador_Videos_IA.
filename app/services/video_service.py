@@ -1,19 +1,28 @@
 import os
+import signal
 import subprocess
 import tempfile
 import time
+import logging
+import shutil
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
+
 from app.config import FFMPEG_BIN, ASPECT_RATIOS, BASE_DIR
-from app.models.project import Project, Scene
-from app.services.storage import ensure_project_dirs
+from app.models.project import Project, Scene, TaskStatus
+from app.services.storage import ensure_project_dirs, save_project
+from app.services.subtitle_service import generate_project_ass_subtitles, escape_ffmpeg_filter_path
+
+logger = logging.getLogger(__name__)
 
 # Diccionario en memoria para reportar el progreso del renderizado a la UI
 RENDER_STATUS: Dict[str, Dict[str, Any]] = {}
 
+
 def get_render_status(project_id: str) -> Dict[str, Any]:
     """Retorna el estado actual de renderizado del proyecto."""
     return RENDER_STATUS.get(project_id, {"status": "idle", "percent": 0, "message": ""})
+
 
 def set_render_status(project_id: str, status: str, percent: int, message: str) -> None:
     """Actualiza el estado de renderizado para consulta desde el cliente."""
@@ -24,6 +33,98 @@ def set_render_status(project_id: str, status: str, percent: int, message: str) 
         "timestamp": time.time()
     }
 
+
+class VideoService:
+    def __init__(self):
+        # Registro de subprocesos activos por project_id
+        self._active_processes: Dict[str, subprocess.Popen] = {}
+        # Registro de banderas de cancelación solicitadas
+        self._cancellation_requested: Dict[str, bool] = {}
+
+    def register_process(self, project_id: str, proc: subprocess.Popen):
+        self._active_processes[project_id] = proc
+
+    def unregister_process(self, project_id: str):
+        self._active_processes.pop(project_id, None)
+
+    def request_cancellation(self, project_id: str) -> bool:
+        """Marca la tarea como cancelada e interrumpe inmediatamente los procesos FFmpeg."""
+        self._cancellation_requested[project_id] = True
+        proc = self._active_processes.get(project_id)
+        
+        if proc and proc.poll() is None:
+            logger.info(f"Cancelando proceso FFmpeg para el proyecto {project_id} (PID: {proc.pid})")
+            try:
+                if os.name == 'nt':
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                        capture_output=True,
+                        check=False
+                    )
+                else:
+                    proc.send_signal(signal.SIGKILL)
+            except Exception as e:
+                logger.error(f"Error finalizando proceso {proc.pid}: {e}")
+            return True
+        return False
+
+    def is_cancelled(self, project_id: str) -> bool:
+        return self._cancellation_requested.get(project_id, False)
+
+    def clear_cancellation_flag(self, project_id: str):
+        self._cancellation_requested.pop(project_id, None)
+
+    def run_ffmpeg_command(self, project_id: str, cmd: List[str], temp_dir: Optional[Path] = None) -> bool:
+        """Ejecuta comandos FFmpeg registrando PID y comprobando cancelaciones."""
+        if self.is_cancelled(project_id):
+            self.cleanup_temp_dir(temp_dir)
+            return False
+
+        try:
+            creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
+            
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                creationflags=creation_flags
+            )
+            
+            self.register_process(project_id, proc)
+            _, stderr = proc.communicate()
+            self.unregister_process(project_id)
+
+            if self.is_cancelled(project_id):
+                logger.warning(f"Operación cancelada durante ejecución FFmpeg para {project_id}")
+                self.cleanup_temp_dir(temp_dir)
+                return False
+
+            if proc.returncode != 0:
+                logger.error(f"FFmpeg falló con código {proc.returncode}: {stderr.decode('utf-8', errors='ignore')}")
+                return False
+
+            return True
+
+        except Exception as e:
+            self.unregister_process(project_id)
+            logger.error(f"Excepción en comando FFmpeg: {e}")
+            self.cleanup_temp_dir(temp_dir)
+            return False
+
+    @staticmethod
+    def cleanup_temp_dir(temp_dir: Optional[Path]):
+        """Elimina el directorio de trabajo temporal en caso de fallo o cancelación."""
+        if temp_dir and temp_dir.exists():
+            try:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                logger.info(f"Directorio temporal limpiado: {temp_dir}")
+            except Exception as e:
+                logger.warning(f"No se pudo eliminar el directorio temporal {temp_dir}: {e}")
+
+
+video_service = VideoService()
+
+
 def render_scene_clip(
     project_id: str,
     scene: Scene,
@@ -32,13 +133,12 @@ def render_scene_clip(
     output_clip_path: Path,
     enable_ken_burns: bool = True
 ) -> None:
-    """
-    Renderiza un clip de video independiente para una escena individual
-    a la resolución objetivo con efecto de movimiento cinematográfico (Ken Burns).
-    """
+    """Renderiza un clip de video independiente para una escena con Ken Burns."""
+    if video_service.is_cancelled(project_id):
+        raise RuntimeError("Proceso cancelado por el usuario.")
+
     paths = ensure_project_dirs(project_id)
     
-    # Determinar ruta local de la imagen
     if not scene.image_path:
         raise ValueError(f"La escena {scene.order} no tiene imagen asignada.")
         
@@ -46,18 +146,13 @@ def render_scene_clip(
     local_img_path = paths["images"] / img_filename
     
     if not local_img_path.exists():
-        raise FileNotFoundError(f"No se encontró el archivo de imagen en {local_img_path}")
+        raise FileNotFoundError(f"No se encontró la imagen en {local_img_path}")
 
-    # Determinar duración y fps
     duration = max(2.5, scene.duration)
     fps = 30
     total_frames = int(duration * fps)
 
-    # Configurar filtro de video:
-    # 1. Escalar manteniendo aspecto y rellenar si es necesario (fit & pad o pan)
-    # 2. Aplicar Ken Burns suave (zoom in o zoom out alternado según número de escena)
     if enable_ken_burns:
-        # Alternar entre zoom in (1.0 a 1.12) y zoom out (1.12 a 1.0) según escena par/impar
         if scene.order % 2 == 1:
             zoom_expr = "min(pzoom+0.0008,1.15)"
         else:
@@ -91,23 +186,23 @@ def render_scene_clip(
         str(output_clip_path)
     ]
 
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"Error en FFmpeg al generar clip de escena {scene.order}: {result.stderr}")
+    success = video_service.run_ffmpeg_command(project_id, cmd)
+    if not success:
+        raise RuntimeError(f"Error o cancelación al generar clip de escena {scene.order}")
+
 
 def assemble_project_video(project: Project) -> str:
-    """
-    Ensambla y renderiza el video completo MP4 en 1080p con audio sincronizado
-    a partir de las escenas aprobadas.
-    """
+    """Ensambla y renderiza el video completo MP4 con audio sincronizado y control de cancelación."""
     project_id = project.id
+    video_service.clear_cancellation_flag(project_id)
+
     paths = ensure_project_dirs(project_id)
     export_dir = paths["export"]
     
     dims = ASPECT_RATIOS.get(project.settings.aspect_ratio, {"width": 1920, "height": 1080})
     target_w, target_h = dims["width"], dims["height"]
     
-    set_render_status(project_id, "rendering", 5, "Iniciando preparación del montaje...")
+    set_render_status(project_id, "processing", 5, "Iniciando preparación del montaje...")
 
     temp_clips = []
     temp_dir = export_dir / f"temp_{int(time.time())}"
@@ -118,12 +213,15 @@ def assemble_project_video(project: Project) -> str:
         if total_scenes == 0:
             raise ValueError("El proyecto no tiene escenas para exportar.")
 
-        # 1. Renderizar cada escena como clip de video independiente
+        # 1. Renderizar cada escena
         for idx, scene in enumerate(project.scenes, start=1):
+            if video_service.is_cancelled(project_id):
+                raise RuntimeError("Cancelado por el usuario.")
+
             percent = int(10 + (idx / total_scenes) * 45)
             set_render_status(
                 project_id, 
-                "rendering", 
+                "processing", 
                 percent, 
                 f"Procesando animación y composición de escena {idx} de {total_scenes}..."
             )
@@ -138,8 +236,11 @@ def assemble_project_video(project: Project) -> str:
             )
             temp_clips.append(clip_path)
 
-        # 2. Crear archivo de lista concat para unir clips de video
-        set_render_status(project_id, "rendering", 60, "Concatenando escenas de video...")
+        # 2. Concatenar clips de video
+        if video_service.is_cancelled(project_id):
+            raise RuntimeError("Cancelado por el usuario.")
+
+        set_render_status(project_id, "processing", 60, "Concatenando escenas de video...")
         concat_file = temp_dir / "concat_list.txt"
         concat_lines = [f"file '{clip.resolve().as_posix()}'" for clip in temp_clips]
         concat_file.write_text("\n".join(concat_lines), encoding="utf-8")
@@ -154,21 +255,22 @@ def assemble_project_video(project: Project) -> str:
             "-c", "copy",
             str(merged_video_path)
         ]
-        res_merge = subprocess.run(cmd_merge, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if res_merge.returncode != 0:
-            raise RuntimeError(f"Error concatenando clips de video: {res_merge.stderr}")
+        
+        if not video_service.run_ffmpeg_command(project_id, cmd_merge, temp_dir):
+            raise RuntimeError("Error o cancelación concatenando clips de video.")
 
         # 3. Preparar pista de audio sincronizada
-        set_render_status(project_id, "rendering", 75, "Sincronizando pista de audio...")
+        if video_service.is_cancelled(project_id):
+            raise RuntimeError("Cancelado por el usuario.")
+
+        set_render_status(project_id, "processing", 75, "Sincronizando pista de audio...")
         final_audio_path = temp_dir / "audio_final.mp3"
 
         if project.settings.audio_mode == "custom" and project.custom_audio_path:
-            # Usar audio del usuario
             custom_audio_filename = project.custom_audio_path.split("?")[0].split("/")[-1]
             source_audio = paths["audio"] / custom_audio_filename
             final_audio_path = source_audio
         else:
-            # Unir los audios de cada escena en una pista continua
             audio_concat_file = temp_dir / "audio_concat.txt"
             audio_lines = []
             
@@ -190,9 +292,7 @@ def assemble_project_video(project: Project) -> str:
                     "-c", "copy",
                     str(final_audio_path)
                 ]
-                res_audio = subprocess.run(cmd_audio, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                if res_audio.returncode != 0:
-                    print(f"Aviso concatenando audio con copy, reintentando con recodificación: {res_audio.stderr}")
+                if not video_service.run_ffmpeg_command(project_id, cmd_audio):
                     cmd_audio_rec = [
                         FFMPEG_BIN,
                         "-y",
@@ -202,12 +302,27 @@ def assemble_project_video(project: Project) -> str:
                         "-c:a", "libmp3lame",
                         str(final_audio_path)
                     ]
-                    subprocess.run(cmd_audio_rec, check=True)
+                    video_service.run_ffmpeg_command(project_id, cmd_audio_rec)
             else:
                 final_audio_path = None
 
-        # 4. Multiplexar video y audio en el MP4 definitivo en 1080p
-        set_render_status(project_id, "rendering", 90, "Codificando video MP4 final en 1080p...")
+        # 3.5 Generar subtítulos dinámicos .ass (estilo Casually Finance) si están habilitados
+        if video_service.is_cancelled(project_id):
+            raise RuntimeError("Cancelado por el usuario.")
+
+        vf_final_args: List[str] = []
+        if getattr(project.settings, "enable_subtitles", True):
+            set_render_status(project_id, "processing", 82, "Generando subtítulos dinámicos (.ass)...")
+            ass_path = temp_dir / "subtitles.ass"
+            generate_project_ass_subtitles(project, ass_path)
+            escaped_ass_path = escape_ffmpeg_filter_path(ass_path)
+            vf_final_args = ["-vf", f"ass='{escaped_ass_path}'"]
+
+        # 4. Multiplexar video, subtítulos quemados y audio
+        if video_service.is_cancelled(project_id):
+            raise RuntimeError("Cancelado por el usuario.")
+
+        set_render_status(project_id, "processing", 90, "Codificando video MP4 final en 1080p...")
         timestamp = int(time.time())
         output_filename = f"video_{project.id}_{timestamp}.mp4"
         final_output_path = export_dir / output_filename
@@ -218,6 +333,7 @@ def assemble_project_video(project: Project) -> str:
                 "-y",
                 "-i", str(merged_video_path),
                 "-i", str(final_audio_path),
+                *vf_final_args,
                 "-c:v", "libx264",
                 "-preset", "medium",
                 "-crf", "19",
@@ -233,6 +349,7 @@ def assemble_project_video(project: Project) -> str:
                 FFMPEG_BIN,
                 "-y",
                 "-i", str(merged_video_path),
+                *vf_final_args,
                 "-c:v", "libx264",
                 "-preset", "medium",
                 "-crf", "19",
@@ -241,26 +358,25 @@ def assemble_project_video(project: Project) -> str:
                 str(final_output_path)
             ]
 
-        res_final = subprocess.run(cmd_final, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if res_final.returncode != 0:
-            raise RuntimeError(f"Error en multiplexado final MP4: {res_final.stderr}")
+        if not video_service.run_ffmpeg_command(project_id, cmd_final, temp_dir):
+            raise RuntimeError("Error o cancelación en el multiplexado final MP4.")
 
         web_video_path = f"/projects/{project.id}/export/{output_filename}"
         project.final_video_path = web_video_path
-        project.status = "completed"
+        project.status = TaskStatus.COMPLETED.value
+        project.progress = 100
+        project.step_message = "¡Video MP4 exportado exitosamente!"
         project.current_step = 6
+        save_project(project)
         
         set_render_status(project_id, "completed", 100, "¡Video MP4 exportado exitosamente!")
         return web_video_path
 
     except Exception as e:
-        set_render_status(project_id, "failed", 0, f"Error en exportación: {str(e)}")
+        if video_service.is_cancelled(project_id):
+            set_render_status(project_id, "cancelled", 0, "Generación cancelada por el usuario.")
+        else:
+            set_render_status(project_id, "failed", 0, f"Error en exportación: {str(e)}")
         raise e
     finally:
-        # Limpieza de archivos temporales de clips
-        try:
-            import shutil
-            shutil.rmtree(temp_dir, ignore_errors=True)
-        except Exception:
-            pass
-
+        video_service.cleanup_temp_dir(temp_dir)

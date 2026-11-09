@@ -445,13 +445,18 @@
           </div>
 
           <!-- Progress Bar Box -->
-          <div id="render-progress-box" class="hidden max-w-xl mx-auto space-y-3">
+          <div id="render-progress-box" class="hidden max-w-xl mx-auto space-y-4">
             <div class="flex justify-between text-xs text-slate-300 font-medium">
               <span id="render-status-msg">Iniciando motor FFmpeg...</span>
               <span id="render-status-pct" class="font-bold text-gold-400">0%</span>
             </div>
             <div class="w-full bg-royal-950 rounded-full h-3 overflow-hidden border border-white/10 shadow-inner">
-              <div id="render-progress-bar" class="h-full w-0 transition-all duration-300"></div>
+              <div id="render-progress-bar" class="h-full w-0 bg-gradient-to-r from-gold-600 via-gold-400 to-gold-300 transition-all duration-300"></div>
+            </div>
+            <div class="pt-2 flex justify-center">
+              <button onclick="cancelVideoRender()" id="btn-cancel-render" class="flex items-center gap-2 px-5 py-2 rounded-xl bg-red-950/70 hover:bg-red-900/80 text-red-200 border border-red-500/40 text-xs font-semibold transition shadow-md">
+                <span>⏹ Cancelar Generación</span>
+              </button>
             </div>
           </div>
         </div>
