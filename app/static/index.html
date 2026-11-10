@@ -435,13 +435,18 @@
         <!-- Render Button & Progress Area -->
         <div class="text-center py-7 bg-royal-950/60 rounded-2xl border border-white/10 p-6 shadow-inner">
           <div id="render-pre-box">
-            <button onclick="startVideoRender()" id="btn-start-render" class="btn-gold px-8 py-3.5 rounded-xl font-bold text-sm shadow-xl transition">
-              <span class="flex items-center gap-2">
-                <i data-lucide="play" class="w-4 h-4 fill-current"></i>
-                <span>Comenzar Renderizado de Video (MP4)</span>
-              </span>
-            </button>
-            <p class="text-xs text-slate-400 mt-2.5">El motor procesa cada plano con FFmpeg a 30 FPS en resolución 1080p.</p>
+            <div class="flex flex-wrap items-center justify-center gap-4">
+              <button onclick="startVideoRender()" id="btn-start-render" class="btn-gold px-8 py-3.5 rounded-xl font-bold text-sm shadow-xl transition">
+                <span class="flex items-center gap-2">
+                  <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+                  <span>Comenzar Renderizado de Video (MP4)</span>
+                </span>
+              </button>
+              <button onclick="loadAndShowMetadata()" id="btn-generate-metadata" class="btn-luxury-secondary flex items-center gap-2 px-6 py-3.5 rounded-xl font-bold text-xs text-gold-300 border border-gold-500/35 hover:border-gold-400 transition shadow-md">
+                <span>📄 Generar y Ver metadatos.txt (YouTube SEO)</span>
+              </button>
+            </div>
+            <p class="text-xs text-slate-400 mt-2.5">El motor procesa cada plano con FFmpeg a 30 FPS en resolución 1080p (16:9) y empaqueta los capítulos exactos.</p>
           </div>
 
           <!-- Progress Bar Box -->
@@ -472,12 +477,34 @@
             <video id="final-video-player" controls class="w-full h-auto max-h-[500px] mx-auto"></video>
           </div>
 
-          <div class="flex justify-center gap-4 pt-4">
+          <div class="flex flex-wrap justify-center gap-4 pt-4">
             <a id="btn-download-video" href="#" download class="btn-gold flex items-center gap-2 px-7 py-3 rounded-xl font-bold shadow-xl transition">
               <i data-lucide="download" class="w-4 h-4 stroke-[2.5]"></i>
               <span>Descargar Video MP4 (1080p)</span>
             </a>
+            <a id="btn-download-metadata" href="#" target="_blank" download="metadatos.txt" class="btn-luxury-secondary flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-gold-300 border border-gold-500/40 shadow-xl transition">
+              <span>📥 Descargar metadatos.txt</span>
+            </a>
           </div>
+        </div>
+
+        <!-- YouTube SEO Metadata Viewer Box -->
+        <div id="metadata-preview-box" class="hidden mt-8 bg-royal-950/90 border border-gold-500/30 rounded-2xl p-6 shadow-2xl space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-white/10">
+            <div>
+              <h3 class="text-sm font-bold text-gold-300 uppercase tracking-wider">📄 Empaquetado SEO para YouTube (metadatos.txt)</h3>
+              <p class="text-xs text-slate-400">3 Títulos (&le;60 car.) • Descripción con Capítulos Sincronizados (MM:SS) • 10 Tags • Idea de Miniatura</p>
+            </div>
+            <div class="flex items-center gap-2.5">
+              <button onclick="copyMetadataToClipboard()" class="px-3.5 py-1.5 rounded-lg bg-royal-800 hover:bg-royal-700 text-gold-200 border border-gold-500/30 text-xs font-semibold transition">
+                📋 Copiar Todo
+              </button>
+              <a id="btn-open-metadata-raw" href="#" target="_blank" class="btn-gold px-3.5 py-1.5 rounded-lg text-royal-950 text-xs font-bold transition">
+                🔗 Abrir / Descargar .txt
+              </a>
+            </div>
+          </div>
+          <pre id="metadata-text-content" class="text-xs text-slate-200 font-mono whitespace-pre-wrap bg-black/50 p-4 rounded-xl border border-white/10 max-h-96 overflow-y-auto leading-relaxed"></pre>
         </div>
       </div>
     </section>
@@ -549,6 +576,6 @@
   </div>
 
   <!-- Main JavaScript Controller -->
-  <script src="/static/js/app.js?v=2.2"></script>
+  <script src="/static/js/app.js?v=2.3"></script>
 </body>
 </html>

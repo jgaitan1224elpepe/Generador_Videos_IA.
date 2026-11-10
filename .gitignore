@@ -10,3 +10,6 @@ projects/
 *.mp4
 *.mp3
 *.png
+.venv
+env
+__pycache__/

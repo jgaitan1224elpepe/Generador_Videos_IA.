@@ -740,6 +740,7 @@ function renderStep6Export() {
   if (appState.project.final_video_path) {
     showFinalVideo(appState.project.final_video_path);
   }
+  loadAndShowMetadata(false);
 }
 
 async function startVideoRender() {
@@ -846,6 +847,7 @@ function showFinalVideo(videoPath) {
   const resultBox = document.getElementById("render-result-box");
   const videoElem = document.getElementById("final-video-player");
   const downloadBtn = document.getElementById("btn-download-video");
+  const metaBtn = document.getElementById("btn-download-metadata");
 
   preBox.classList.remove("hidden");
   progressBox.classList.add("hidden");
@@ -854,6 +856,53 @@ function showFinalVideo(videoPath) {
   videoElem.src = videoPath;
   downloadBtn.href = videoPath;
   downloadBtn.setAttribute("download", `video_${appState.project.name || 'proyecto'}.mp4`);
+
+  if (metaBtn && appState.project) {
+    metaBtn.href = `/api/projects/${appState.project.id}/metadata/download`;
+    metaBtn.setAttribute("download", `metadatos_${appState.project.id}.txt`);
+  }
+  loadAndShowMetadata(false);
+}
+
+async function loadAndShowMetadata(notify = true) {
+  if (!appState.project) return;
+  try {
+    const res = await fetch(`/api/projects/${appState.project.id}/metadata`);
+    if (!res.ok) throw new Error("No se pudo generar metadatos.txt");
+    const data = await res.json();
+
+    const previewBox = document.getElementById("metadata-preview-box");
+    const contentElem = document.getElementById("metadata-text-content");
+    const rawLink = document.getElementById("btn-open-metadata-raw");
+    const metaBtn = document.getElementById("btn-download-metadata");
+
+    if (previewBox && contentElem) {
+      contentElem.innerText = data.content || "";
+      previewBox.classList.remove("hidden");
+    }
+    if (rawLink) {
+      rawLink.href = `/api/projects/${appState.project.id}/metadata/download`;
+    }
+    if (metaBtn) {
+      metaBtn.href = `/api/projects/${appState.project.id}/metadata/download`;
+    }
+    if (notify) {
+      showToast("Archivo metadatos.txt generado y actualizado con capítulos exactos", "success");
+    }
+  } catch (err) {
+    if (notify) showToast("Error obteniendo metadatos: " + err.message, "error");
+  }
+}
+
+async function copyMetadataToClipboard() {
+  const contentElem = document.getElementById("metadata-text-content");
+  if (!contentElem || !contentElem.innerText) return;
+  try {
+    await navigator.clipboard.writeText(contentElem.innerText);
+    showToast("Metadatos copiados al portapapeles", "success");
+  } catch (err) {
+    showToast("No se pudo copiar automáticamente", "error");
+  }
 }
 
 // --- MODAL DE PROYECTOS ---

@@ -263,6 +263,7 @@ def generate_narration_endpoint(project_id: str, req: Optional[GenerateNarration
 
     try:
         tts_service.generate_all_scene_audios(project)
+        gemini_service.generate_youtube_metadata_file(project)
         project.current_step = max(int(project.current_step), 4)
         storage.save_project(project)
         return project
@@ -444,7 +445,53 @@ def get_project_status(project_id: str):
         progress=int(render_info.get("percent", project.progress or 0)),
         current_step=str(render_info.get("message") or project.step_message or ""),
         error_message=project.error_message,
-        final_video_path=project.final_video_path
+        final_video_path=project.final_video_path,
+        metadata_file_path=project.metadata_file_path
+    )
+
+
+@app.get("/api/projects/{project_id}/metadata")
+def get_or_generate_project_metadata(project_id: str):
+    """Genera o actualiza 'metadatos.txt' con los tiempos reales de capítulos y retorna su contenido."""
+    project = storage.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+
+    web_path = gemini_service.generate_youtube_metadata_file(project)
+    storage.save_project(project)
+
+    paths = storage.ensure_project_dirs(project_id)
+    meta_file = paths["export"] / "metadatos.txt"
+    content = meta_file.read_text(encoding="utf-8") if meta_file.exists() else ""
+
+    return {
+        "status": "ok",
+        "metadata_file_path": web_path,
+        "youtube_metadata": project.youtube_metadata,
+        "content": content,
+    }
+
+
+@app.get("/api/projects/{project_id}/metadata/download")
+def download_project_metadata_txt(project_id: str):
+    """Sirve el archivo 'metadatos.txt' listo para ver en el navegador o descargar."""
+    project = storage.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+
+    gemini_service.generate_youtube_metadata_file(project)
+    storage.save_project(project)
+
+    paths = storage.ensure_project_dirs(project_id)
+    meta_file = paths["export"] / "metadatos.txt"
+    if not meta_file.exists():
+        raise HTTPException(status_code=404, detail="Archivo metadatos.txt no encontrado")
+
+    return FileResponse(
+        meta_file,
+        media_type="text/plain; charset=utf-8",
+        filename=f"metadatos_{project.id}.txt",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"}
     )
 
 

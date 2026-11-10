@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional, List, Union
+from typing import Optional, List
 from pydantic import BaseModel, Field, field_validator
 import time
 import uuid
@@ -25,11 +25,32 @@ class ProjectStatusUpdate(BaseModel):
     current_step: str = ""
     error_message: Optional[str] = None
     final_video_path: Optional[str] = None
+    metadata_file_path: Optional[str] = None
 
-# 3. Modelo de Escena (compatible con Gemini, TTS, FFmpeg y Frontend)
+# 3. Modelo de Metadatos SEO y Empaquetado para YouTube (Funcionalidad 5)
+class YouTubeMetadata(BaseModel):
+    title_options: List[str] = Field(
+        default_factory=list,
+        description="Exactamente 3 opciones de título atractivas y de alto CTR (máximo 60 caracteres cada una)."
+    )
+    description_body: str = Field(
+        default="",
+        description="Descripción persuasiva de 2 párrafos optimizada para SEO en YouTube."
+    )
+    tags: List[str] = Field(
+        default_factory=list,
+        description="Exactamente 10 etiquetas (tags) relevantes de alto volumen de búsqueda."
+    )
+    thumbnail_idea: str = Field(
+        default="",
+        description="Idea detallada para la miniatura: composición visual, texto corto de impacto (2-3 palabras) y contraste de color."
+    )
+
+# 4. Modelo de Escena (compatible con Gemini, TTS, FFmpeg y Frontend)
 class Scene(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
     order: int
+    chapter_title: str = ""  # Título corto del capítulo para marcas de tiempo de YouTube
     script_text: str = ""  # Fragmento exacto del guion sin modificaciones
     visual_description: str = ""  # Descripción visual de lo que debe verse
     image_prompt: str = ""  # Prompt detallado para el generador de imágenes
@@ -42,9 +63,9 @@ class Scene(BaseModel):
     audio_path: Optional[str] = None  # Audio generado o recortado para esta escena
     audio_status: str = "pending"  # pending, generating, ready, custom_synced, failed
 
-# 4. Modelo de Configuración del Proyecto
+# 5. Modelo de Configuración del Proyecto
 class ProjectSettings(BaseModel):
-    aspect_ratio: str = "16:9"  # 16:9, 9:16, 1:1
+    aspect_ratio: str = "16:9"  # MVP fijado en 16:9 horizontal (stub preparado para 9:16)
     visual_style: str = "cinematic"
     target_duration: Optional[float] = None  # En segundos si el usuario lo especificó
     narration_language: str = "es"
@@ -56,7 +77,7 @@ class ProjectSettings(BaseModel):
     enable_subtitles: bool = True  # Subtítulos dinámicos .ass quemados en 1080p
     transition_duration: float = 0.5  # Segundos
 
-# 5. Modelo Principal de Proyecto
+# 6. Modelo Principal de Proyecto
 class Project(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
     name: str
@@ -70,6 +91,8 @@ class Project(BaseModel):
     error_message: Optional[str] = None
     settings: ProjectSettings = Field(default_factory=ProjectSettings)
     scenes: List[Scene] = Field(default_factory=list)
+    youtube_metadata: Optional[YouTubeMetadata] = None
+    metadata_file_path: Optional[str] = None
     custom_audio_path: Optional[str] = None
     full_audio_path: Optional[str] = None
     final_video_path: Optional[str] = None
@@ -88,9 +111,10 @@ class Project(BaseModel):
     class Config:
         use_enum_values = True
 
-# 6. Esquema para la respuesta estructurada de Gemini al dividir el guion
+# 7. Esquema para la respuesta estructurada de Gemini al dividir el guion + Metadatos YouTube
 class GeminiSceneItem(BaseModel):
     scene_number: int = Field(description="Número correlativo de la escena, empezando en 1")
+    chapter_title: str = Field(description="Título corto y atractivo para el capítulo de YouTube de esta escena (máx 45 caracteres).")
     exact_script_fragment: str = Field(description="Fragmento textual EXACTO del guion original. NO resumir ni alterar.")
     visual_description: str = Field(description="Descripción visual detallada de lo que aparece en pantalla.")
     image_prompt: str = Field(description="Prompt optimizado en inglés o español para generar la imagen con IA (detallando sujeto, iluminación, fondo y estilo).")
@@ -100,3 +124,4 @@ class GeminiSceneItem(BaseModel):
 
 class GeminiScriptAnalysisResult(BaseModel):
     scenes: List[GeminiSceneItem] = Field(description="Lista ordenada y completa de todas las escenas que cubren el 100% del guion.")
+    youtube_metadata: YouTubeMetadata = Field(description="Metadatos SEO completos para publicar el video en YouTube.")

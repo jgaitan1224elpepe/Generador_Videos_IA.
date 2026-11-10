@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 600" width="400" height="600">
+  <!-- Personaje minimalista estilo Casually Explained - Emoción: feliz -->
+  <g stroke="#000000" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="200" cy="140" r="70" fill="#FFFFFF"/>
+    <circle cx="175" cy="125" r="6" fill="#000000"/>
+    <circle cx="225" cy="125" r="6" fill="#000000"/>
+    <path d="M 170 155 Q 200 185 230 155"/>
+    <line x1="200" y1="210" x2="200" y2="410"/>
+    <line x1="200" y1="255" x2="115" y2="200"/>
+    <line x1="200" y1="255" x2="285" y2="200"/>
+    <line x1="200" y1="410" x2="140" y2="550"/>
+    <line x1="200" y1="410" x2="260" y2="550"/>
+  </g>
+</svg>
+

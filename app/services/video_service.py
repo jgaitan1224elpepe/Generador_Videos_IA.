@@ -12,6 +12,7 @@ from app.config import FFMPEG_BIN, ASPECT_RATIOS, BASE_DIR
 from app.models.project import Project, Scene, TaskStatus
 from app.services.storage import ensure_project_dirs, save_project
 from app.services.subtitle_service import generate_project_ass_subtitles, escape_ffmpeg_filter_path
+from app.services.gemini_service import generate_youtube_metadata_file
 
 logger = logging.getLogger(__name__)
 
@@ -191,18 +192,31 @@ def render_scene_clip(
         raise RuntimeError(f"Error o cancelación al generar clip de escena {scene.order}")
 
 
+def render_vertical_short_stub(project: Project) -> str:
+    """
+    STUB DE ARQUITECTURA (FASE FUTURA):
+    Preparado para el renderizado vertical 9:16 (1080x1920) orientado a YouTube Shorts,
+    TikTok e Instagram Reels con reencuadre dinámico (smart crop) y subtítulos centrados.
+    Por decisión de diseño del MVP actual, la exportación activa opera exclusivamente en 16:9 (1920x1080).
+    """
+    raise NotImplementedError(
+        "El modo vertical 9:16 está reservado para una fase posterior. El MVP exporta en 16:9 Full HD (1920x1080)."
+    )
+
+
 def assemble_project_video(project: Project) -> str:
-    """Ensambla y renderiza el video completo MP4 con audio sincronizado y control de cancelación."""
+    """Ensambla y renderiza el video completo MP4 en 16:9 Full HD con audio sincronizado y control de cancelación."""
     project_id = project.id
     video_service.clear_cancellation_flag(project_id)
 
     paths = ensure_project_dirs(project_id)
     export_dir = paths["export"]
     
-    dims = ASPECT_RATIOS.get(project.settings.aspect_ratio, {"width": 1920, "height": 1080})
-    target_w, target_h = dims["width"], dims["height"]
+    # MVP: Exportación fijada en formato horizontal 16:9 Full HD (1920x1080)
+    project.settings.aspect_ratio = "16:9"
+    target_w, target_h = 1920, 1080
     
-    set_render_status(project_id, "processing", 5, "Iniciando preparación del montaje...")
+    set_render_status(project_id, "processing", 5, "Iniciando preparación del montaje 16:9...")
 
     temp_clips = []
     temp_dir = export_dir / f"temp_{int(time.time())}"
@@ -371,15 +385,20 @@ def assemble_project_video(project: Project) -> str:
         if not video_service.run_ffmpeg_command(project_id, cmd_final, temp_dir):
             raise RuntimeError("Error o cancelación en el multiplexado final MP4.")
 
+        # 5. Generar y empaquetar metadatos.txt para YouTube con tiempos exactos de capítulos (MM:SS)
+        set_render_status(project_id, "processing", 96, "Empaquetando metadatos SEO para YouTube (metadatos.txt)...")
+        metadata_web_path = generate_youtube_metadata_file(project)
+        project.metadata_file_path = metadata_web_path
+
         web_video_path = f"/projects/{project.id}/export/{output_filename}"
         project.final_video_path = web_video_path
         project.status = TaskStatus.COMPLETED.value
         project.progress = 100
-        project.step_message = "¡Video MP4 exportado exitosamente!"
+        project.step_message = "¡Video MP4 y metadatos.txt exportados exitosamente!"
         project.current_step = 6
         save_project(project)
         
-        set_render_status(project_id, "completed", 100, "¡Video MP4 exportado exitosamente!")
+        set_render_status(project_id, "completed", 100, "¡Video MP4 y metadatos.txt exportados exitosamente!")
         return web_video_path
 
     except Exception as e:
