@@ -122,34 +122,65 @@ function populateProjectData() {
   selectAspectRatio(p.settings.aspect_ratio || "16:9", false);
   selectVisualStyle(p.settings.visual_style || "cinematic", false);
 
-  if (p.settings.voice_id) {
-    document.getElementById("voice-select").value = p.settings.voice_id;
-  }
-  if (p.settings.voice_speed) {
-    document.getElementById("voice-speed").value = p.settings.voice_speed;
-    document.getElementById("voice-speed-val").innerText = p.settings.voice_speed + "x";
-  }
-  if (p.settings.voice_pitch) {
-    document.getElementById("voice-pitch").value = p.settings.voice_pitch;
-    document.getElementById("voice-pitch-val").innerText = p.settings.voice_pitch + "Hz";
-  }
+  const activeVoice = (p.settings && p.settings.voice_id) || p.voice || "es-ES-AlvaroNeural";
+  p.voice = activeVoice;
+  p.settings.voice_id = activeVoice;
+  document.getElementById("voice-select").value = activeVoice;
+
+  // Aplicar preset dinámico (+10% velocidad / -2Hz tono) si el proyecto tenía valores neutros antiguos
+  const effectiveSpeed = (!p.settings.voice_speed || Math.abs(p.settings.voice_speed - 1.0) < 0.01) ? 1.10 : p.settings.voice_speed;
+  const effectivePitch = (p.settings.voice_pitch === undefined || p.settings.voice_pitch === null || Math.abs(p.settings.voice_pitch) < 0.1) ? -2 : p.settings.voice_pitch;
+
+  p.settings.voice_speed = effectiveSpeed;
+  p.settings.voice_pitch = effectivePitch;
+
+  document.getElementById("voice-speed").value = effectiveSpeed;
+  document.getElementById("voice-speed-val").innerText = effectiveSpeed + "x";
+  document.getElementById("voice-pitch").value = effectivePitch;
+  document.getElementById("voice-pitch-val").innerText = (effectivePitch > 0 ? "+" : "") + effectivePitch + "Hz";
 
   updateScriptStats();
   renderScenesViews();
 }
 
-// Guardar datos básicos del proyecto
+// Guardar datos básicos del proyecto (incluyendo configuración de voz actual)
 async function saveProjectBasicInfo() {
   if (!appState.project) return;
   appState.project.name = document.getElementById("project-name").value.trim() || "Sin Título";
   appState.project.video_title = document.getElementById("video-title").value.trim() || "Video";
   appState.project.full_script = document.getElementById("full-script").value.trim();
 
+  const voiceSelect = document.getElementById("voice-select");
+  const voiceSpeed = document.getElementById("voice-speed");
+  const voicePitch = document.getElementById("voice-pitch");
+
+  if (voiceSelect && voiceSelect.value) {
+    appState.project.voice = voiceSelect.value;
+    appState.project.settings.voice_id = voiceSelect.value;
+  }
+  if (voiceSpeed && voiceSpeed.value) {
+    appState.project.settings.voice_speed = parseFloat(voiceSpeed.value) || 1.10;
+  }
+  if (voicePitch && voicePitch.value !== "") {
+    appState.project.settings.voice_pitch = parseFloat(voicePitch.value);
+  }
+
   await fetch(`/api/projects/${appState.project.id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(appState.project)
   });
+}
+
+async function onVoiceSettingsChanged() {
+  if (!appState.project) return;
+  await saveProjectBasicInfo();
+  const notice = document.getElementById("voice-sync-notice");
+  if (notice) {
+    const sel = document.getElementById("voice-select");
+    const voiceLabel = sel && sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text.split("(")[0].trim() : appState.project.settings.voice_id;
+    notice.innerHTML = `<span class="text-amber-300 font-semibold">⚠ Voz cambiada a ${voiceLabel}:</span> Pulsa <strong>"Sintetizar Narración Completa (Toma Única)"</strong> para actualizar el audio con la nueva voz.`;
+  }
 }
 
 // --- NAVEGACIÓN DE PASOS (STEPPER) ---
@@ -495,79 +526,96 @@ function renderStep4Audio() {
   const container = document.getElementById("scenes-audio-container");
   if (!container || !appState.project) return;
 
-  container.innerHTML = appState.project.scenes.map(s => `
+  const masterBanner = appState.project.full_audio_path ? `
+    <div class="mb-4 p-4 rounded-xl bg-royal-950/90 border border-gold-500/35 flex flex-col md:flex-row items-center justify-between gap-4 shadow-md">
+      <div class="flex items-center gap-3">
+        <span class="w-8 h-8 rounded-xl bg-gold-500/20 border border-gold-400/40 text-gold-300 flex items-center justify-center font-bold text-xs">🎙️</span>
+        <div>
+          <p class="text-xs font-bold text-gold-300 uppercase tracking-wider">Pista Maestra Continua (Una Sola Toma)</p>
+          <p class="text-[11px] text-slate-300">Voz activa: <strong class="text-white">${appState.project.settings.voice_id}</strong></p>
+        </div>
+      </div>
+      <audio controls src="${appState.project.full_audio_path}" class="h-9 w-full md:w-80"></audio>
+    </div>
+  ` : "";
+
+  container.innerHTML = masterBanner + appState.project.scenes.map(s => `
     <div class="scene-card rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
       <div class="flex items-center gap-3 w-full md:w-1/2">
         <span class="w-7 h-7 rounded-lg bg-gold-500/15 border border-gold-500/25 text-gold-300 font-bold text-xs flex items-center justify-center shrink-0">#${s.order}</span>
         <div class="truncate">
           <p class="text-xs font-semibold text-slate-100 truncate">${s.script_text}</p>
-          <p class="text-[11px] text-slate-400 font-medium">Duración: ${s.duration}s</p>
+          <p class="text-[11px] text-slate-400 font-medium">Duración sincronizada: ${s.duration}s</p>
         </div>
       </div>
 
       <div class="flex items-center gap-3 w-full md:w-1/2 justify-end">
         ${s.audio_path ? `
           <audio controls src="${s.audio_path}" class="h-8 max-w-[240px]"></audio>
+          <span class="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shrink-0">✓ Toma Única</span>
         ` : `
-          <span class="text-xs text-amber-400">Audio no generado</span>
+          <span class="text-xs text-amber-400">Pendiente de síntesis</span>
         `}
-
-        <button onclick="regenerateSceneAudio('${s.id}')" id="btn-audio-${s.id}" class="btn-luxury-secondary px-3 py-1.5 rounded-lg text-xs text-slate-200 font-medium transition shrink-0" title="Regenerar audio para esta escena">
-          <i data-lucide="refresh-cw" class="w-3.5 h-3.5 inline text-gold-400"></i>
-        </button>
       </div>
     </div>
   `).join("");
+
+  // Forzar recarga de elementos <audio> para evitar caché del navegador al cambiar de voz
+  container.querySelectorAll("audio").forEach(a => a.load());
 
   if (window.lucide) lucide.createIcons();
 }
 
 async function generateAllNarration() {
-  // Guardar configuración de voz seleccionada
-  appState.project.settings.voice_id = document.getElementById("voice-select").value;
-  appState.project.settings.voice_speed = parseFloat(document.getElementById("voice-speed").value);
-  appState.project.settings.voice_pitch = parseFloat(document.getElementById("voice-pitch").value);
-  await saveProjectBasicInfo();
+  const selectedVoice = document.getElementById("voice-select").value;
+  const selectedSpeed = parseFloat(document.getElementById("voice-speed").value) || 1.0;
+  const selectedPitch = parseFloat(document.getElementById("voice-pitch").value) || 0.0;
+
+  appState.project.settings.voice_id = selectedVoice;
+  appState.project.settings.voice_speed = selectedSpeed;
+  appState.project.settings.voice_pitch = selectedPitch;
 
   const btn = document.getElementById("btn-gen-all-audio");
-  btn.disabled = true;
-  btn.innerHTML = `<span class="animate-spin mr-2">⚙️</span> Sintetizando voces neuronales...`;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="animate-spin mr-2">⚙️</span> Sintetizando Toma Única (${selectedVoice})...`;
+  }
 
   try {
-    const res = await fetch(`/api/projects/${appState.project.id}/generate-narration`, { method: "POST" });
+    await saveProjectBasicInfo();
+    const res = await fetch(`/api/projects/${appState.project.id}/generate-narration`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        voice_id: selectedVoice,
+        voice_speed: selectedSpeed,
+        voice_pitch: selectedPitch
+      })
+    });
     if (!res.ok) throw new Error("Error sintetizando audio");
     appState.project = await res.json();
-    showToast("¡Narración sintetizada con éxito!", "success");
+
+    const notice = document.getElementById("voice-sync-notice");
+    if (notice) {
+      notice.innerHTML = `✓ Narración en <strong class="text-emerald-300">Una Sola Toma</strong> generada con <strong>${selectedVoice}</strong>.`;
+    }
+
+    showToast(`¡Narración continua generada con ${selectedVoice}!`, "success");
     renderStep4Audio();
   } catch (err) {
     showToast("Error en narración: " + err.message, "error");
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = `<i data-lucide="volume-2" class="w-4 h-4 text-gold-400"></i><span>Sintetizar Narración Completa</span>`;
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<i data-lucide="volume-2" class="w-4 h-4 text-royal-950"></i><span>Sintetizar Narración Completa (Toma Única)</span>`;
+    }
     if (window.lucide) lucide.createIcons();
   }
 }
 
 async function regenerateSceneAudio(sceneId) {
-  const btn = document.getElementById(`btn-audio-${sceneId}`);
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = `<span class="animate-spin text-xs">⚙️</span>`;
-  }
-
-  try {
-    const res = await fetch(`/api/projects/${appState.project.id}/scenes/${sceneId}/generate-audio`, { method: "POST" });
-    if (!res.ok) throw new Error("Error al regenerar");
-    const data = await res.json();
-    const idx = appState.project.scenes.findIndex(s => s.id === sceneId);
-    if (idx !== -1) appState.project.scenes[idx] = data.scene;
-    showToast("Audio de escena actualizado", "success");
-    renderStep4Audio();
-  } catch (err) {
-    showToast("Error: " + err.message, "error");
-  } finally {
-    if (btn) btn.disabled = false;
-  }
+  // Redirigir siempre al flujo de "Una Sola Toma" para preservar la voz seleccionada y continuidad
+  await generateAllNarration();
 }
 
 async function handleCustomAudioUpload(input) {

@@ -259,18 +259,28 @@ def assemble_project_video(project: Project) -> str:
         if not video_service.run_ffmpeg_command(project_id, cmd_merge, temp_dir):
             raise RuntimeError("Error o cancelación concatenando clips de video.")
 
-        # 3. Preparar pista de audio sincronizada
+        # 3. Preparar pista de audio sincronizada (Priorizando "Una Sola Toma" continua)
         if video_service.is_cancelled(project_id):
             raise RuntimeError("Cancelado por el usuario.")
 
-        set_render_status(project_id, "processing", 75, "Sincronizando pista de audio...")
-        final_audio_path = temp_dir / "audio_final.mp3"
+        set_render_status(project_id, "processing", 75, "Sincronizando pista maestra de audio...")
+        final_audio_path: Optional[Path] = temp_dir / "audio_final.mp3"
+        single_take_master = paths["audio"] / "full_narration.mp3"
+        if project.full_audio_path:
+            master_fname = project.full_audio_path.split("?")[0].split("/")[-1]
+            candidate_master = paths["audio"] / master_fname
+            if candidate_master.exists():
+                single_take_master = candidate_master
 
         if project.settings.audio_mode == "custom" and project.custom_audio_path:
             custom_audio_filename = project.custom_audio_path.split("?")[0].split("/")[-1]
             source_audio = paths["audio"] / custom_audio_filename
-            final_audio_path = source_audio
+            final_audio_path = source_audio if source_audio.exists() else None
+        elif single_take_master.exists():
+            # Usar directamente la narración continua de "Una Sola Toma"
+            final_audio_path = single_take_master
         else:
+            # Fallback para proyectos antiguos con audios fragmentados por escena
             audio_concat_file = temp_dir / "audio_concat.txt"
             audio_lines = []
             

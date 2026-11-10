@@ -49,8 +49,8 @@ class ProjectSettings(BaseModel):
     target_duration: Optional[float] = None  # En segundos si el usuario lo especificó
     narration_language: str = "es"
     voice_id: str = "es-ES-AlvaroNeural"
-    voice_speed: float = 1.0  # Factor multiplicador (1.0 = normal)
-    voice_pitch: float = 0.0  # Ajuste de tono
+    voice_speed: float = 1.10  # Factor multiplicador (+10% dinamismo por defecto)
+    voice_pitch: float = -2.0  # Ajuste de tono (-2Hz profundidad documental por defecto)
     audio_mode: str = "ai"  # "ai" o "custom"
     enable_ken_burns: bool = True
     enable_subtitles: bool = True  # Subtítulos dinámicos .ass quemados en 1080p
@@ -62,6 +62,7 @@ class Project(BaseModel):
     name: str
     video_title: str = ""
     full_script: str = ""
+    voice: Optional[str] = "es-ES-AlvaroNeural"  # Sincronizado con settings.voice_id
     status: str = TaskStatus.IDLE.value  # idle, processing, completed, failed, cancelled, draft, etc.
     current_step: int = 1  # Etapa del asistente UI (1 a 6)
     progress: int = Field(default=0, ge=0, le=100)

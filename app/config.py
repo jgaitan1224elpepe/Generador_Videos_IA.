@@ -77,16 +77,19 @@ ASPECT_RATIOS = {
     "1:1": {"width": 1080, "height": 1080, "name": "Cuadrado (Instagram / Feed)", "ratio": "1:1"}
 }
 
-# Catálogo de voces IA (Edge-TTS neuronales)
+# Catálogo curado de voces neuronales IA (Estilo Documental, Financiero y Narrativo)
 AVAILABLE_VOICES = [
-    {"id": "es-ES-AlvaroNeural", "name": "Álvaro (España - Masculina, Narrador cálido)", "gender": "Male", "lang": "es-ES"},
-    {"id": "es-ES-ElviraNeural", "name": "Elvira (España - Femenina, Clara y profesional)", "gender": "Female", "lang": "es-ES"},
-    {"id": "es-MX-DaliaNeural", "name": "Dalia (México - Femenina, Dinámica y expresiva)", "gender": "Female", "lang": "es-MX"},
-    {"id": "es-MX-JorgeNeural", "name": "Jorge (México - Masculina, Firme y formal)", "gender": "Male", "lang": "es-MX"},
-    {"id": "es-AR-TomasNeural", "name": "Tomás (Argentina - Masculina, Acento rioplatense)", "gender": "Male", "lang": "es-AR"},
-    {"id": "es-CO-GonzaloNeural", "name": "Gonzalo (Colombia - Masculina, Neutra y natural)", "gender": "Male", "lang": "es-CO"},
-    {"id": "en-US-GuyNeural", "name": "Guy (EE.UU. - Masculina, Locutor documental)", "gender": "Male", "lang": "en-US"},
-    {"id": "en-US-JennyNeural", "name": "Jenny (EE.UU. - Femenina, Amigable y clara)", "gender": "Female", "lang": "en-US"}
+    # Español — Documental y Finanzas
+    {"id": "es-ES-AlvaroNeural", "name": "Álvaro (España - Masculina Profunda • Documental / Finanzas)", "gender": "Male", "lang": "es-ES"},
+    {"id": "es-CO-GonzaloNeural", "name": "Gonzalo (Latinoamérica Neutro - Masculina Ejecutiva • Analítica)", "gender": "Male", "lang": "es-CO"},
+    {"id": "es-MX-JorgeNeural", "name": "Jorge (México - Masculina Firme • Corporativa)", "gender": "Male", "lang": "es-MX"},
+    {"id": "es-ES-ElviraNeural", "name": "Elvira (España - Femenina Segura • Documental)", "gender": "Female", "lang": "es-ES"},
+    # Inglés (EE. UU.) — Finanzas, Retención y Estilo Casually Finance
+    {"id": "en-US-EricNeural", "name": "Eric (EE.UU. - Joven, Enérgico y Dinámico • Alta Retención)", "gender": "Male", "lang": "en-US"},
+    {"id": "en-US-ChristopherNeural", "name": "Christopher (EE.UU. - Serio, Confiable y Moderno • Finanzas)", "gender": "Male", "lang": "en-US"},
+    {"id": "en-US-SteffanNeural", "name": "Steffan (EE.UU. - Directo, Claro y Analítico • Ensayo)", "gender": "Male", "lang": "en-US"},
+    {"id": "en-US-RogerNeural", "name": "Roger (EE.UU. - Masculina Segura y Persuasiva • Narrador)", "gender": "Male", "lang": "en-US"},
+    {"id": "en-US-GuyNeural", "name": "Guy (EE.UU. - Masculina Grave • Estilo Casually Finance)", "gender": "Male", "lang": "en-US"},
 ]
 
 def get_gemini_api_key() -> str:

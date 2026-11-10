@@ -53,6 +53,11 @@ class UpdatePromptRequest(BaseModel):
 class UpdateScenesRequest(BaseModel):
     scenes: List[Scene]
 
+class GenerateNarrationRequest(BaseModel):
+    voice_id: Optional[str] = None
+    voice_speed: Optional[float] = None
+    voice_pitch: Optional[float] = None
+
 # --- ENDPOINTS DE CONFIGURACIÓN ---
 
 def shutil_check_bin(bin_path: str) -> bool:
@@ -105,10 +110,14 @@ def get_project_details(project_id: str):
 
 @app.put("/api/projects/{project_id}")
 def update_project_details(project_id: str, updated: Project):
-    """Actualiza datos de configuración o guion del proyecto."""
+    """Actualiza datos de configuración o guion del proyecto sincronizando la voz."""
     project = storage.get_project(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
+    if updated.settings and updated.settings.voice_id:
+        updated.voice = updated.settings.voice_id
+    elif updated.voice:
+        updated.settings.voice_id = updated.voice
     storage.save_project(updated)
     return updated
 
@@ -230,15 +239,28 @@ def update_scene_prompt(project_id: str, scene_id: str, req: UpdatePromptRequest
     storage.save_project(project)
     return {"status": "ok", "scene": scene}
 
-# --- ETAPA 4: NARRACIÓN Y AUDIO ---
+# --- ETAPA 4: NARRACIÓN Y AUDIO (FLUJO EN UNA SOLA TOMA) ---
 
 @app.post("/api/projects/{project_id}/generate-narration")
-def generate_narration_endpoint(project_id: str):
-    """Genera la narración de audio IA para todas las escenas."""
+def generate_narration_endpoint(project_id: str, req: Optional[GenerateNarrationRequest] = None):
+    """
+    Genera la narración de audio IA en UNA SOLA TOMA continua para todo el guion,
+    aplicando inmediatamente cualquier cambio de voz, velocidad o tono enviado.
+    """
     project = storage.get_project(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
         
+    if req:
+        if req.voice_id:
+            project.voice = req.voice_id
+            project.settings.voice_id = req.voice_id
+        if req.voice_speed is not None:
+            project.settings.voice_speed = req.voice_speed
+        if req.voice_pitch is not None:
+            project.settings.voice_pitch = req.voice_pitch
+        storage.save_project(project)
+
     try:
         tts_service.generate_all_scene_audios(project)
         project.current_step = max(int(project.current_step), 4)
@@ -248,20 +270,34 @@ def generate_narration_endpoint(project_id: str):
         raise HTTPException(status_code=500, detail=f"Error generando narración: {str(e)}")
 
 @app.post("/api/projects/{project_id}/scenes/{scene_id}/generate-audio")
-def generate_single_scene_audio(project_id: str, scene_id: str):
-    """Regenera la narración de audio para una escena individual."""
+def generate_single_scene_audio(project_id: str, scene_id: str, req: Optional[GenerateNarrationRequest] = None):
+    """
+    Por compatibilidad con el principio de 'Una Sola Toma', regenera la pista maestra
+    completa con la voz actual seleccionada y actualiza todos los recortes de escena.
+    """
     project = storage.get_project(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
         
+    if req:
+        if req.voice_id:
+            project.voice = req.voice_id
+            project.settings.voice_id = req.voice_id
+        if req.voice_speed is not None:
+            project.settings.voice_speed = req.voice_speed
+        if req.voice_pitch is not None:
+            project.settings.voice_pitch = req.voice_pitch
+        storage.save_project(project)
+
     scene = next((s for s in project.scenes if s.id == scene_id or str(s.order) == str(scene_id)), None)
     if not scene:
         raise HTTPException(status_code=404, detail="Escena no encontrada.")
         
     try:
-        tts_service.synthesize_scene_audio(project, scene)
+        tts_service.generate_all_scene_audios(project)
         storage.save_project(project)
-        return {"status": "ok", "scene": scene}
+        updated_scene = next((s for s in project.scenes if s.id == scene.id), scene)
+        return {"status": "ok", "scene": updated_scene, "project": project}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error sintetizando audio: {str(e)}")
 
@@ -436,8 +472,11 @@ def cancel_project_task(project_id: str):
 
 @app.get("/")
 def serve_index():
-    """Sirve la aplicación de interfaz de usuario de Studio."""
+    """Sirve la aplicación de interfaz de usuario de Studio sin caché obsoleta."""
     index_file = STATIC_DIR / "index.html"
     if not index_file.exists():
         return {"status": "ok", "message": "Backend listo. Instalando frontend..."}
-    return FileResponse(index_file)
+    return FileResponse(
+        index_file,
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"}
+    )

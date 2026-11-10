@@ -294,31 +294,31 @@
           <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
               <label class="block text-xs font-semibold text-gold-200 uppercase tracking-wider mb-2">Voz Neuronal</label>
-              <select id="voice-select" class="w-full bg-royal-950/80 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-gold-400">
+              <select id="voice-select" onchange="onVoiceSettingsChanged()" class="w-full bg-royal-950/80 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-gold-400">
                 <!-- Dynamically populated -->
               </select>
             </div>
 
             <div>
               <label class="block text-xs font-semibold text-gold-200 uppercase tracking-wider mb-2">
-                Velocidad de Lectura (<span id="voice-speed-val" class="text-gold-400">1.0x</span>)
+                Velocidad de Lectura (<span id="voice-speed-val" class="text-gold-400">1.1x (+10%)</span>)
               </label>
-              <input type="range" id="voice-speed" min="0.75" max="1.35" step="0.05" value="1.0" class="w-full accent-gold-400" oninput="document.getElementById('voice-speed-val').innerText = this.value + 'x'">
+              <input type="range" id="voice-speed" min="0.75" max="1.35" step="0.05" value="1.10" class="w-full accent-gold-400" oninput="document.getElementById('voice-speed-val').innerText = this.value + 'x'" onchange="onVoiceSettingsChanged()">
             </div>
 
             <div>
               <label class="block text-xs font-semibold text-gold-200 uppercase tracking-wider mb-2">
-                Tono (<span id="voice-pitch-val" class="text-gold-400">0Hz</span>)
+                Tono (<span id="voice-pitch-val" class="text-gold-400">-2Hz</span>)
               </label>
-              <input type="range" id="voice-pitch" min="-20" max="20" step="2" value="0" class="w-full accent-gold-400" oninput="document.getElementById('voice-pitch-val').innerText = (this.value > 0 ? '+' : '') + this.value + 'Hz'">
+              <input type="range" id="voice-pitch" min="-20" max="20" step="2" value="-2" class="w-full accent-gold-400" oninput="document.getElementById('voice-pitch-val').innerText = (this.value > 0 ? '+' : '') + this.value + 'Hz'" onchange="onVoiceSettingsChanged()">
             </div>
           </div>
 
-          <div class="flex items-center justify-between pt-5 border-t border-white/10">
-            <p class="text-xs text-slate-400">Cada escena generará su audio independiente sincronizado con la imagen.</p>
-            <button onclick="generateAllNarration()" id="btn-gen-all-audio" class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-royal-700 hover:bg-royal-600 text-gold-200 font-semibold text-xs border border-gold-500/30 shadow-md transition">
-              <i data-lucide="volume-2" class="w-4 h-4 text-gold-400"></i>
-              <span>Sintetizar Narración Completa</span>
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-5 border-t border-white/10">
+            <p id="voice-sync-notice" class="text-xs text-slate-400">Narración en <strong class="text-gold-300">Una Sola Toma continua</strong> para mantener respiración, ritmo y entonación documental.</p>
+            <button onclick="generateAllNarration()" id="btn-gen-all-audio" class="btn-gold flex items-center gap-2 px-5 py-2.5 rounded-xl text-royal-950 font-bold text-xs shadow-md transition shrink-0">
+              <i data-lucide="volume-2" class="w-4 h-4 text-royal-950"></i>
+              <span>Sintetizar Narración Completa (Toma Única)</span>
             </button>
           </div>
         </div>
@@ -549,6 +549,6 @@
   </div>
 
   <!-- Main JavaScript Controller -->
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/app.js?v=2.2"></script>
 </body>
 </html>

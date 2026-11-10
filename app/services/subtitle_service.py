@@ -1,3 +1,4 @@
+import json
 import re
 import logging
 from pathlib import Path
@@ -56,10 +57,10 @@ def escape_ass_text(text: str) -> str:
     return text.replace("\\", "").replace("{", "(").replace("}", ")")
 
 
-def _try_whisper_word_timestamps(audio_path: Path, start_offset: float) -> Optional[List[Dict]]:
+def _try_whisper_word_timestamps(audio_path: Path, start_offset: float = 0.0) -> Optional[List[Dict]]:
     """
-    Si 'faster-whisper' está instalado en el entorno, extrae word-level timestamps reales.
-    En caso de no estar instalado o fallar, retorna None para usar el alineador fonético.
+    Si 'faster-whisper' está instalado en el entorno, extrae word-level timestamps reales
+    sobre el archivo de audio continuo o de escena.
     """
     try:
         from faster_whisper import WhisperModel  # type: ignore
@@ -82,6 +83,23 @@ def _try_whisper_word_timestamps(audio_path: Path, start_offset: float) -> Optio
         return None
 
 
+def _load_saved_word_timings(audio_dir: Path) -> Optional[List[Dict]]:
+    """
+    Carga las marcas de tiempo exactas generadas en una sola toma por EdgeTTSEngine
+    desde 'word_timings.json' si están disponibles.
+    """
+    timings_file = audio_dir / "word_timings.json"
+    if not timings_file.exists():
+        return None
+    try:
+        data = json.loads(timings_file.read_text(encoding="utf-8"))
+        words = data.get("words", [])
+        return words if isinstance(words, list) and len(words) > 0 else None
+    except Exception as e:
+        logger.warning(f"No se pudo leer word_timings.json: {e}")
+        return None
+
+
 def _compute_weighted_word_timestamps(
     text: str,
     start_offset: float,
@@ -97,12 +115,10 @@ def _compute_weighted_word_timestamps(
     if not tokens:
         return []
 
-    # Margen inicial y final suave para empatar con el ataque y cola de locución TTS
     lead_in = min(0.08, duration * 0.03)
     tail_out = min(0.12, duration * 0.04)
     effective_duration = max(0.4, duration - lead_in - tail_out)
 
-    # Peso por palabra: longitud de caracteres + micro-pausa por signo de puntuación
     weights: List[float] = []
     for tok in tokens:
         base_len = max(2, len(re.sub(r"[^\wáéíóúüñÁÉÍÓÚÜÑ]", "", tok)))
@@ -134,12 +150,18 @@ def _compute_weighted_word_timestamps(
 def group_words_into_chunks(words: List[Dict], max_words: int = 4) -> List[List[Dict]]:
     """
     Agrupa la lista de palabras con tiempos en bloques dinámicos de 4 a 5 palabras
-    (estilo Casually Finance), cortando también al encontrar punto o cierre de frase.
+    (estilo Casually Finance), cortando también al encontrar punto, cierre de frase
+    o cambio de escena.
     """
     chunks: List[List[Dict]] = []
     current_chunk: List[Dict] = []
 
     for w in words:
+        if current_chunk and w.get("scene_order") is not None and current_chunk[-1].get("scene_order") is not None:
+            if w["scene_order"] != current_chunk[-1]["scene_order"]:
+                chunks.append(current_chunk)
+                current_chunk = []
+
         current_chunk.append(w)
         token_text = w["word"]
         ends_sentence = token_text.endswith((".", "!", "?", ":", ";"))
@@ -181,11 +203,40 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
 
+def _append_chunks_to_ass(ass_lines: List[str], chunks: List[List[Dict]]) -> None:
+    """Añade los eventos Dialogue con resaltado karaoke activo dorado (#FFD700)."""
+    GOLD_ACTIVE_TAG = r"{\1c&H0000D7FF&\fscx106\fscy106}"
+    WHITE_BASE_TAG = r"{\1c&H00FFFFFF&\fscx100\fscy100}"
+
+    for chunk in chunks:
+        for active_idx, active_word in enumerate(chunk):
+            start_ts = format_ass_timestamp(active_word["start"])
+            if active_idx < len(chunk) - 1:
+                end_sec = chunk[active_idx + 1]["start"]
+            else:
+                end_sec = active_word["end"]
+            end_ts = format_ass_timestamp(max(active_word["start"] + 0.05, end_sec))
+
+            rendered_tokens: List[str] = []
+            for idx, w_item in enumerate(chunk):
+                safe_word = escape_ass_text(w_item["word"])
+                if idx == active_idx:
+                    rendered_tokens.append(f"{GOLD_ACTIVE_TAG}{safe_word}{WHITE_BASE_TAG}")
+                else:
+                    rendered_tokens.append(safe_word)
+
+            dialogue_text = " ".join(rendered_tokens)
+            ass_lines.append(
+                f"Dialogue: 0,{start_ts},{end_ts},Default,,0,0,0,,{dialogue_text}"
+            )
+
+
 def generate_project_ass_subtitles(project: Project, output_ass_path: Path) -> Path:
     """
     Genera el archivo completo de subtítulos '.ass' con resaltado karaoke activo
     palabra por palabra en dorado (#FFD700 -> ASS &H0000D7FF&) sobre bloques de
     4 palabras en blanco (#FFFFFF -> ASS &H00FFFFFF&).
+    Prioriza la pista continua de "Una Sola Toma" (full_narration.mp3 + word_timings.json / Whisper).
     """
     paths = ensure_project_dirs(project.id)
     dims = ASPECT_RATIOS.get(project.settings.aspect_ratio, {"width": 1920, "height": 1080})
@@ -193,72 +244,52 @@ def generate_project_ass_subtitles(project: Project, output_ass_path: Path) -> P
 
     ass_lines: List[str] = [build_ass_header(play_res_x, play_res_y)]
 
-    # Tags ASS para el estilo Casually Finance:
-    # Dorado brillante #FFD700 en BGR hexadecimal es &H0000D7FF& + ligero pop de escala (106%)
-    GOLD_ACTIVE_TAG = r"{\1c&H0000D7FF&\fscx106\fscy106}"
-    WHITE_BASE_TAG = r"{\1c&H00FFFFFF&\fscx100\fscy100}"
+    full_audio_file = paths["audio"] / "full_narration.mp3"
+    global_words: Optional[List[Dict]] = None
 
-    audio_timeline_offset = 0.0
+    # 1. Intentar usar la toma continua única (Whisper sobre full_narration.mp3 o word_timings.json nativo)
+    if project.settings.audio_mode != "custom" and full_audio_file.exists():
+        global_words = _try_whisper_word_timestamps(full_audio_file, 0.0)
+        if not global_words:
+            global_words = _load_saved_word_timings(paths["audio"])
 
-    for scene in project.scenes:
-        local_audio: Optional[Path] = None
-        if scene.audio_path:
-            fname = scene.audio_path.split("?")[0].split("/")[-1]
-            candidate = paths["audio"] / fname
-            if candidate.exists():
-                local_audio = candidate
+    if global_words:
+        chunks = group_words_into_chunks(global_words, max_words=4)
+        _append_chunks_to_ass(ass_lines, chunks)
+    else:
+        # 2. Fallback por escena (para proyectos existentes o audio personalizado)
+        audio_timeline_offset = 0.0
+        for scene in project.scenes:
+            local_audio: Optional[Path] = None
+            if scene.audio_path:
+                fname = scene.audio_path.split("?")[0].split("/")[-1]
+                candidate = paths["audio"] / fname
+                if candidate.exists():
+                    local_audio = candidate
 
-        # Determinar la duración real que ocupa esta escena en la pista de audio final
-        if local_audio and project.settings.audio_mode != "custom":
-            scene_audio_dur = get_audio_duration_ffprobe(local_audio)
-            if scene_audio_dur <= 0:
+            if local_audio and project.settings.audio_mode != "custom":
+                scene_audio_dur = get_audio_duration_ffprobe(local_audio)
+                if scene_audio_dur <= 0:
+                    scene_audio_dur = max(2.5, float(scene.duration))
+            else:
                 scene_audio_dur = max(2.5, float(scene.duration))
-        else:
-            scene_audio_dur = max(2.5, float(scene.duration))
 
-        # Extraer tiempos por palabra (intenta faster-whisper si existe, o alineación fonética exacta)
-        words = None
-        if local_audio and project.settings.audio_mode != "custom":
-            words = _try_whisper_word_timestamps(local_audio, audio_timeline_offset)
+            words = None
+            if local_audio and project.settings.audio_mode != "custom":
+                words = _try_whisper_word_timestamps(local_audio, audio_timeline_offset)
 
-        if not words:
-            words = _compute_weighted_word_timestamps(
-                text=scene.script_text,
-                start_offset=audio_timeline_offset,
-                duration=scene_audio_dur,
-            )
-
-        chunks = group_words_into_chunks(words, max_words=4)
-
-        # Por cada bloque de 4 palabras, emitir un evento Dialogue por cada palabra activa
-        # garantizando continuidad exacta (sin parpadeo) mientras el resaltado dorado avanza
-        for chunk in chunks:
-            for active_idx, active_word in enumerate(chunk):
-                start_ts = format_ass_timestamp(active_word["start"])
-                # Conectar el fin con el inicio de la siguiente palabra del mismo bloque para cero parpadeo
-                if active_idx < len(chunk) - 1:
-                    end_sec = chunk[active_idx + 1]["start"]
-                else:
-                    end_sec = active_word["end"]
-                end_ts = format_ass_timestamp(max(active_word["start"] + 0.05, end_sec))
-
-                rendered_tokens: List[str] = []
-                for idx, w_item in enumerate(chunk):
-                    safe_word = escape_ass_text(w_item["word"])
-                    if idx == active_idx:
-                        rendered_tokens.append(f"{GOLD_ACTIVE_TAG}{safe_word}{WHITE_BASE_TAG}")
-                    else:
-                        rendered_tokens.append(safe_word)
-
-                dialogue_text = " ".join(rendered_tokens)
-                ass_lines.append(
-                    f"Dialogue: 0,{start_ts},{end_ts},Default,,0,0,0,,{dialogue_text}"
+            if not words:
+                words = _compute_weighted_word_timestamps(
+                    text=scene.script_text,
+                    start_offset=audio_timeline_offset,
+                    duration=scene_audio_dur,
                 )
 
-        audio_timeline_offset += scene_audio_dur
+            chunks = group_words_into_chunks(words, max_words=4)
+            _append_chunks_to_ass(ass_lines, chunks)
+            audio_timeline_offset += scene_audio_dur
 
     output_ass_path.parent.mkdir(parents=True, exist_ok=True)
     output_ass_path.write_text("\n".join(ass_lines) + "\n", encoding="utf-8-sig")
     logger.info(f"Archivo de subtítulos .ass generado en: {output_ass_path}")
     return output_ass_path
-
